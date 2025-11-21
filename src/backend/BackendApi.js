@@ -21,3 +21,5 @@ export const resolver = makeResolver({
 		return await backendService.getOvertimeSummary();
 	},
 });
+
+export const handler = resolver;

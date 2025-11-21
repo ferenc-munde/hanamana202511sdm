@@ -13,6 +13,7 @@ class BackendService {
 		try {
 			// Fetch users from Jira using the users search API
 			const response = await api.asUser().requestJira(route`/rest/api/3/users/search?maxResults=50`);
+			console.log(response);
 
 			if (!response.ok) {
 				console.error("Failed to fetch Jira users:", response.status);

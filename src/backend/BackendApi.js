@@ -9,9 +9,11 @@ export const resolver = makeResolver({
 
 	/**
 	 * Get employee overtime data (async)
+	 * Accepts optional date range from frontend
 	 */
-	async getEmployeeOvertimeData() {
-		return await backendService.getEmployeeOvertimeData();
+	async getEmployeeOvertimeData(request) {
+		const { startDate, endDate } = request.payload || {};
+		return await backendService.getEmployeeOvertimeData(startDate, endDate);
 	},
 
 	/**

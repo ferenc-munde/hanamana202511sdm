@@ -1,5 +1,5 @@
 import { makeInvoke } from "@forge/bridge";
-import ForgeReconciler, { Badge, Button, DynamicTable, Stack, Text, Strong, Box, Inline, DatePicker, User } from "@forge/react";
+import ForgeReconciler, { Badge, Button, DynamicTable, Stack, Text, Strong, Box, Inline, DatePicker, User, Textfield } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
 export const callBackend = makeInvoke();
@@ -18,6 +18,11 @@ const App = () => {
     const startOfYear = new Date(now.getFullYear(), 0, 1);
     const [startDate, setStartDate] = useState(startOfYear.toISOString().split("T")[0]);
     const [endDate, setEndDate] = useState(now.toISOString().split("T")[0]);
+
+    // Editing state for daily hours
+    const [editingUserId, setEditingUserId] = useState(null);
+    const [editingValue, setEditingValue] = useState("");
+    const [savingUserId, setSavingUserId] = useState(null);
 
     useEffect(() => {
         // Debounce to prevent excessive API calls when both dates are changed
@@ -45,6 +50,53 @@ const App = () => {
         return `${hours.toFixed(1)}h`;
     };
 
+    const handleEditDailyHours = (userId, currentDailyHours) => {
+        setEditingUserId(userId);
+        setEditingValue(currentDailyHours.toString());
+    };
+
+    const handleCancelEdit = () => {
+        setEditingUserId(null);
+        setEditingValue("");
+    };
+
+    const handleSaveDailyHours = async (userId) => {
+        try {
+            setSavingUserId(userId);
+            const newDailyHours = parseFloat(editingValue);
+
+            if (isNaN(newDailyHours) || newDailyHours <= 0) {
+                console.error("Invalid daily hours value");
+                return;
+            }
+
+            // Call backend to update daily hours and get recalculated data
+            const updatedEmployee = await callBackend("updateEmployeeDailyHours", {
+                userId,
+                dailyHours: newDailyHours,
+                startDate,
+                endDate,
+            });
+
+            if (updatedEmployee) {
+                // Update the employees array with the new data
+                setEmployees((prevEmployees) =>
+                    prevEmployees.map((emp) =>
+                        emp.id === userId ? updatedEmployee : emp
+                    )
+                );
+            }
+
+            // Clear editing state
+            setEditingUserId(null);
+            setEditingValue("");
+        } catch (error) {
+            console.error("Error saving daily hours:", error);
+        } finally {
+            setSavingUserId(null);
+        }
+    };
+
     const exportToCSV = () => {
         if (!employees || employees.length === 0) {
             console.warn("No data to export");
@@ -56,11 +108,12 @@ const App = () => {
 
         // Create CSV rows
         const csvRows = employees.map(employee => {
+            const dailyHours = employee.customDailyHours || 8;
             return [
                 employee.name || "Unknown",
                 employee.totalHours?.toFixed(1) || "0.0",
                 employee.requiredHours?.toFixed(1) || "0.0",
-                "8.0",
+                dailyHours.toFixed(1),
                 employee.overtime?.toFixed(1) || "0.0"
             ].join(",");
         });
@@ -92,32 +145,81 @@ const App = () => {
         ],
     };
 
-    const rows = employees.map((employee) => ({
-        key: employee.id,
-        cells: [
-            {
-                key: "employee",
-                content: (
-                    <Inline>
-                        <Box>
-                            <User accountId={employee.id}></User>
+    const rows = employees.map((employee) => {
+        const isEditing = editingUserId === employee.id;
+        const isSaving = savingUserId === employee.id;
+        const dailyHours = employee.customDailyHours || 8;
+
+        return {
+            key: employee.id,
+            cells: [
+                {
+                    key: "employee",
+                    content: (
+                        <Inline>
+                            <Box>
+                                <User accountId={employee.id}></User>
+                            </Box>
+                        </Inline>
+                    ),
+                },
+                { key: "workedHours", content: <Box padding="space.100"><Text>{formatHours(employee.totalHours)}</Text></Box> },
+                { key: "requiredHours", content: <Box padding="space.100"><Text>{formatHours(employee.requiredHours)}</Text></Box> },
+                {
+                    key: "dailyHours",
+                    content: (
+                        <Box padding="space.100">
+                            {isEditing ? (
+                                <Inline space="space.100" alignBlock="center">
+                                    <Textfield
+                                        value={editingValue}
+                                        onChange={(e) => setEditingValue(e.target.value)}
+                                        placeholder="Daily hours"
+                                        type="number"
+                                        width="xsmall"
+                                        isDisabled={isSaving}
+                                    />
+                                    <Button
+                                        appearance="primary"
+                                        onClick={() => handleSaveDailyHours(employee.id)}
+                                        isDisabled={isSaving}
+                                    >
+                                        {isSaving ? "Saving..." : "Save"}
+                                    </Button>
+                                    <Button
+                                        appearance="subtle"
+                                        onClick={handleCancelEdit}
+                                        isDisabled={isSaving}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </Inline>
+                            ) : (
+                                <Inline space="space.100" alignBlock="center">
+                                    <Text>{dailyHours}h</Text>
+                                    <Button
+                                        appearance="primary"
+                                        onClick={() => handleEditDailyHours(employee.id, dailyHours)}
+                                        spacing="compact"
+                                    >
+                                        Edit
+                                    </Button>
+                                </Inline>
+                            )}
                         </Box>
-                    </Inline>
-                ),
-            },
-            { key: "workedHours", content: <Box padding="space.100"><Text>{formatHours(employee.totalHours)}</Text></Box> },
-            { key: "requiredHours", content: <Box padding="space.100"><Text>{formatHours(employee.requiredHours)}</Text></Box> },
-            { key: "dailyHours", content: <Box padding="space.100"><Text>8.0h</Text></Box> },
-            {
-                key: "overtime",
-                content: (
-                    <Box padding="space.100">
-                        <Text>{formatHours(employee.overtime)}</Text>
-                    </Box>
-                ),
-            },
-        ],
-    }));
+                    ),
+                },
+                {
+                    key: "overtime",
+                    content: (
+                        <Box padding="space.100">
+                            <Text>{formatHours(employee.overtime)}</Text>
+                        </Box>
+                    ),
+                },
+            ],
+        };
+    });
 
     return (
         <Stack space="space.600">
@@ -131,13 +233,13 @@ const App = () => {
                             onChange={(newDate) => setStartDate(newDate)}
                         />
                         <Button
-                            appearance="default"
+                            appearance="warning"
                             onClick={exportToCSV}
                             style={{
                                 border: "1px solid black",
                                 borderRadius: "4px",
                                 color: "black",
-                                backgroundColor: "white"
+                                backgroundColor: "green"
                             }}
                         >
                             Export to CSV

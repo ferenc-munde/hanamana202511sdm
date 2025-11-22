@@ -22,6 +22,14 @@ export const resolver = makeResolver({
 	async getOvertimeSummary() {
 		return await backendService.getOvertimeSummary();
 	},
+
+	/**
+	 * Update employee daily hours and recalculate overtime
+	 */
+	async updateEmployeeDailyHours(request) {
+		const { userId, dailyHours, startDate, endDate } = request.payload;
+		return await backendService.updateEmployeeDailyHours(userId, dailyHours, startDate, endDate);
+	},
 });
 
 export const handler = resolver;

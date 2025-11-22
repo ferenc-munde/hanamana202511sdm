@@ -1,17 +1,8 @@
 import { makeInvoke } from "@forge/bridge";
-import ForgeReconciler, { Badge, DynamicTable, Stack, Text, Strong, Box, Inline, DatePicker } from "@forge/react";
+import ForgeReconciler, { Badge, DynamicTable, Stack, Text, Strong, Box, Inline, DatePicker, User } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
 export const callBackend = makeInvoke();
-
-// Employee name-only renderer (avatars removed)
-const NameOnly = ({ name }) => {
-    return (
-        <Text>
-            <Strong>{name}</Strong>
-        </Text>
-    );
-};
 
 /**
  * Main Overtime Calculator Component
@@ -71,8 +62,8 @@ const App = () => {
                 key: "employee",
                 content: (
                     <Inline>
-                        <Box padding="space.100">
-                            <NameOnly name={employee.name} />
+                        <Box>
+                            <User accountId={employee.id}></User>
                         </Box>
                     </Inline>
                 ),

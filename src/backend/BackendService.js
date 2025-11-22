@@ -53,29 +53,24 @@ class BackendService {
     }
 
     /**
-     * Calculate required work hours for a date range
+     * Calculate required work hours for a date range (simple weekday calculation)
      * @param {Date} startDate - Start date
      * @param {Date} endDate - End date
      * @param {number} expectedDailyHours - Expected daily hours (default 8)
-     * @param {string[]} holidays - Array of holiday dates in YYYY-MM-DD format
-     * @param {string[]} extraWorkdays - Array of extra workday dates in YYYY-MM-DD format
      * @returns {number} Required hours
      */
-    calculateRequiredHours(startDate, endDate, expectedDailyHours = 8, holidays = [], extraWorkdays = []) {
+    calculateRequiredHours(startDate, endDate, expectedDailyHours = 8) {
         const totalDays = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
         let workdays = 0;
 
         for (let i = 0; i < totalDays; i++) {
             const currentDate = new Date(startDate);
             currentDate.setDate(currentDate.getDate() + i);
-            
-            const dateStr = currentDate.toISOString().split("T")[0];
+
             const dayOfWeek = currentDate.getDay();
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const isHoliday = holidays.includes(dateStr);
-            const isExtraWorkday = extraWorkdays.includes(dateStr);
 
-            if ((!isWeekend && !isHoliday) || isExtraWorkday) {
+            if (!isWeekend) {
                 workdays++;
             }
         }
@@ -85,14 +80,22 @@ class BackendService {
 
     /**
      * Get employee overtime data from JTTP API
+     * @param {string} startDate - Start date in YYYY-MM-DD format (optional, defaults to start of year)
+     * @param {string} endDate - End date in YYYY-MM-DD format (optional, defaults to today)
      * @returns {Array} Array of employee objects with overtime calculations
      */
-    async getEmployeeOvertimeData() {
+    async getEmployeeOvertimeData(startDate, endDate) {
         try {
-            const now = new Date();
-            const startOfYear = new Date(now.getFullYear(), 0, 1);
-            const startDateStr = startOfYear.toISOString().split("T")[0];
-            const endDateStr = now.toISOString().split("T")[0];
+            // Use provided dates or default to start of year until today
+            let startDateStr = startDate;
+            let endDateStr = endDate;
+
+            if (!startDateStr || !endDateStr) {
+                const now = new Date();
+                const startOfYear = new Date(now.getFullYear(), 0, 1);
+                startDateStr = startDateStr || startOfYear.toISOString().split("T")[0];
+                endDateStr = endDateStr || now.toISOString().split("T")[0];
+            }
 
             console.log(`Fetching worklog data from ${startDateStr} to ${endDateStr}`);
 
@@ -106,7 +109,10 @@ class BackendService {
 
             console.log(`Found ${summaryData.userView.length} users in JTTP response`);
 
-            const requiredHours = this.calculateRequiredHours(startOfYear, now, 8, [], []);
+            // Calculate required hours for the selected date range
+            const startDateObj = new Date(startDateStr);
+            const endDateObj = new Date(endDateStr);
+            const requiredHours = this.calculateRequiredHours(startDateObj, endDateObj, 8);
 
             const employees = summaryData.userView.map((userEntry) => {
                 const user = userEntry.user || {};
@@ -231,7 +237,7 @@ class BackendService {
             const systemUsers = await this.getAllSystemUsers();
 
             // requiredHours same calculation as getEmployeeOvertimeData
-            const requiredHours = this.calculateRequiredHours(startOfYear, now, 8, [], []);
+            const requiredHours = this.calculateRequiredHours(startOfYear, now, 8);
 
             const employees = systemUsers.map(su => {
                 const j = jttpMap.get(su.id);

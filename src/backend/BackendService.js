@@ -1,4 +1,4 @@
-import api, { route, fetch } from "@forge/api";
+import api, { fetch, route } from "@forge/api";
 
 class BackendService {
 	// API Configuration

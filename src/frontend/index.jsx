@@ -1,5 +1,5 @@
 import { makeInvoke } from "@forge/bridge";
-import ForgeReconciler, { Badge, DynamicTable, Heading, Stack, Text, Strong, Box, Inline } from "@forge/react";
+import ForgeReconciler, { Badge, DynamicTable, Heading, Stack, Text } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
 export const callBackend = makeInvoke();
@@ -78,8 +78,6 @@ const UserAvatar = ({ employee }) => {
 
 /**
  * Main Overtime Calculator Component
- * - Only fetches users who have JTTP data (getEmployeeOvertimeData)
- * - Increased spacing and table padding to improve appearance
  */
 const App = () => {
 	const [employees, setEmployees] = useState([]);
@@ -198,4 +196,8 @@ const App = () => {
 	);
 };
 
-ForgeReconciler.render(<App />);
+ForgeReconciler.render(
+	<React.StrictMode>
+		<App />
+	</React.StrictMode>,
+);

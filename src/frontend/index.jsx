@@ -1,5 +1,5 @@
 import { makeInvoke } from "@forge/bridge";
-import ForgeReconciler, { Badge, DynamicTable, Stack, Text, Strong, Box, Inline, DatePicker, User } from "@forge/react";
+import ForgeReconciler, { Badge, Button, DynamicTable, Stack, Text, Strong, Box, Inline, DatePicker, User } from "@forge/react";
 import React, { useEffect, useState } from "react";
 
 export const callBackend = makeInvoke();
@@ -45,6 +45,43 @@ const App = () => {
         return `${hours.toFixed(1)}h`;
     };
 
+    const exportToCSV = () => {
+        if (!employees || employees.length === 0) {
+            console.warn("No data to export");
+            return;
+        }
+
+        // Create CSV header
+        const headers = ["Employee", "Worked Hours", "Required Hours", "Daily Hours", "Overtime"];
+
+        // Create CSV rows
+        const csvRows = employees.map(employee => {
+            return [
+                employee.name || "Unknown",
+                employee.totalHours?.toFixed(1) || "0.0",
+                employee.requiredHours?.toFixed(1) || "0.0",
+                "8.0",
+                employee.overtime?.toFixed(1) || "0.0"
+            ].join(",");
+        });
+
+        // Combine header and rows
+        const csvContent = [headers.join(","), ...csvRows].join("\n");
+
+        // Create blob and download
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute("href", url);
+        link.setAttribute("download", `overtime_report_${startDate}_to_${endDate}.csv`);
+        link.style.visibility = "hidden";
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const head = {
         cells: [
             { key: "employee", content: "Employee", width: 25 },
@@ -75,10 +112,7 @@ const App = () => {
                 key: "overtime",
                 content: (
                     <Box padding="space.100">
-                        <Badge
-                            appearance={employee.overtime >= 0 ? "primary" : "default"}
-                            text={employee.overtime >= 0 ? `+${formatHours(employee.overtime)}` : formatHours(employee.overtime)}
-                        />
+                        <Text>{formatHours(employee.overtime)}</Text>
                     </Box>
                 ),
             },
@@ -96,6 +130,18 @@ const App = () => {
                             value={startDate}
                             onChange={(newDate) => setStartDate(newDate)}
                         />
+                        <Button
+                            appearance="default"
+                            onClick={exportToCSV}
+                            style={{
+                                border: "1px solid black",
+                                borderRadius: "4px",
+                                color: "black",
+                                backgroundColor: "white"
+                            }}
+                        >
+                            Export to CSV
+                        </Button>
                     </Stack>
                 </Box>
                 <Box>

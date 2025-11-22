@@ -5,42 +5,39 @@ import React, { useEffect, useState } from "react";
 export const callBackend = makeInvoke();
 
 /**
- * Avatar component that displays initials from first and last name
+ * Avatar component that displays user avatar from API
  */
-const InitialsAvatar = ({ firstName, lastName, size = 40 }) => {
-	const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+const UserAvatar = ({ employee }) => {
+	const { firstName, lastName, avatar, displayName } = employee;
 
-	// Generate a consistent color based on the name
-	const getColorFromName = (name) => {
-		let hash = 0;
-		for (let i = 0; i < name.length; i++) {
-			hash = name.charCodeAt(i) + ((hash << 5) - hash);
-		}
-		const hue = hash % 360;
-		return `hsl(${hue}, 70%, 60%)`;
-	};
-
-	const backgroundColor = getColorFromName(`${firstName}${lastName}`);
-
-	const avatarStyle = {
-		width: `${size}px`,
-		height: `${size}px`,
-		borderRadius: "50%",
-		backgroundColor,
-		color: "white",
-		display: "inline-flex",
-		alignItems: "center",
-		justifyContent: "center",
-		fontWeight: "bold",
-		fontSize: `${size / 2.5}px`,
-		marginRight: "12px",
-		flexShrink: 0,
-	};
+	// Use size32x32 from the API avatar object, or fallback to generated avatar
+	const avatarUrl = avatar?.size32x32 || avatar?.size48x48 || avatar?.size24x24;
 
 	const containerStyle = {
 		display: "flex",
 		alignItems: "center",
 		gap: "8px",
+	};
+
+	const avatarImgStyle = {
+		width: "32px",
+		height: "32px",
+		borderRadius: "50%",
+		flexShrink: 0,
+	};
+
+	const fallbackAvatarStyle = {
+		width: "32px",
+		height: "32px",
+		borderRadius: "50%",
+		backgroundColor: "#4C9AFF",
+		color: "white",
+		display: "inline-flex",
+		alignItems: "center",
+		justifyContent: "center",
+		fontWeight: "bold",
+		fontSize: "14px",
+		flexShrink: 0,
 	};
 
 	const nameContainerStyle = {
@@ -59,9 +56,16 @@ const InitialsAvatar = ({ firstName, lastName, size = 40 }) => {
 		marginTop: "2px",
 	};
 
+	// Generate initials for fallback
+	const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+
 	return (
 		<div style={containerStyle}>
-			<div style={avatarStyle}>{initials}</div>
+			{avatarUrl ? (
+				<img src={avatarUrl} alt={displayName || `${firstName} ${lastName}`} style={avatarImgStyle} />
+			) : (
+				<div style={fallbackAvatarStyle}>{initials}</div>
+			)}
 			<div style={nameContainerStyle}>
 				<span style={nameStyle}>
 					{firstName} {lastName}
@@ -129,7 +133,7 @@ const App = () => {
 		cells: [
 			{
 				key: "employee",
-				content: <InitialsAvatar firstName={employee.firstName} lastName={employee.lastName} />,
+				content: <UserAvatar employee={employee} />,
 			},
 			{
 				key: "startDate",

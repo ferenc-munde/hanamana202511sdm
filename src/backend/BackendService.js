@@ -1,4 +1,5 @@
 import api, { route, fetch } from "@forge/api";
+import { kvs } from "@forge/kvs";
 
 class BackendService {
     JTTP_API_KEY = "eyJhY2NvdW50SWQiOiI3MTIwMjA6OWU3OWRlZTMtYzg4NC00MTg2LWFlYjktNjhlMTRlZjRmNDUwIiwiY2xpZW50SWQiOjI2NjQxLCJzZWNyZXQiOiI5VUM0cU8wUkhZdlVFdmRwUGIzV1hQcUo1dGxaZyt3Zm1yNEhydlN4eUlmeDhuY2V1em5Hb0RVLzVCYXZMT0t6NjJreUZSTDBFM1NRZHhHeER4eWlGZ1x1MDAzZFx1MDAzZCJ9";
@@ -109,19 +110,26 @@ class BackendService {
 
             console.log(`Found ${summaryData.userView.length} users in JTTP response`);
 
+            // Get all user IDs and fetch custom daily hours for them
+            const userIds = summaryData.userView.map(u => u.user?.id || u.user?.accountId || "unknown");
+            const customDailyHoursMap = await this.getCustomDailyHoursBatch(userIds);
+
             // Calculate required hours for the selected date range
             const startDateObj = new Date(startDateStr);
             const endDateObj = new Date(endDateStr);
-            const requiredHours = this.calculateRequiredHours(startDateObj, endDateObj, 8);
 
             const employees = summaryData.userView.map((userEntry) => {
                 const user = userEntry.user || {};
+                const userId = user.id || user.accountId || "unknown";
                 const totalLoggedSeconds = userEntry.totalLogged || 0;
                 const totalLoggedHours = totalLoggedSeconds / 3600;
 
-                // Avatar removed — return name only
+                // Use custom daily hours if available, otherwise default to 8
+                const customDailyHours = customDailyHoursMap.get(userId) || 8;
+                const requiredHours = this.calculateRequiredHours(startDateObj, endDateObj, customDailyHours);
+
                 return {
-                    id: user.id || user.accountId || "unknown",
+                    id: userId,
                     name: user.name || user.displayName || "Unknown User",
                     totalHours: Math.round(totalLoggedHours * 100) / 100,
                     requiredHours: Math.round(requiredHours * 100) / 100,
@@ -129,6 +137,7 @@ class BackendService {
                     overtimePercentage: Math.round(((totalLoggedHours - requiredHours) / (requiredHours || 1)) * 10000) / 100,
                     billableHours: Math.round((userEntry.billableLoggedSeconds || 0) / 3600 * 100) / 100,
                     nonBillableHours: Math.round((userEntry.nonBillableLoggedSeconds || 0) / 3600 * 100) / 100,
+                    customDailyHours: customDailyHours,
                 };
             });
 
@@ -268,6 +277,112 @@ class BackendService {
         } catch (err) {
             console.error("Error in getAllEmployees:", err);
             return [];
+        }
+    }
+
+    /**
+     * Save custom daily hours for a specific user in KVS
+     * @param {string} userId - User account ID
+     * @param {number} dailyHours - Custom daily hours (e.g., 7.5, 8, 9)
+     */
+    async saveCustomDailyHours(userId, dailyHours) {
+        try {
+            const key = `dailyHours:${userId}`;
+            await kvs.set(key, dailyHours);
+            console.log(`Saved custom daily hours for user ${userId}: ${dailyHours}`);
+            return { success: true };
+        } catch (error) {
+            console.error(`Error saving custom daily hours for user ${userId}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get custom daily hours for a specific user from KVS
+     * @param {string} userId - User account ID
+     * @returns {number|null} Custom daily hours or null if not set
+     */
+    async getCustomDailyHours(userId) {
+        try {
+            const key = `dailyHours:${userId}`;
+            const dailyHours = await kvs.get(key);
+            return dailyHours !== undefined ? dailyHours : null;
+        } catch (error) {
+            console.error(`Error getting custom daily hours for user ${userId}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Get custom daily hours for multiple users in batch
+     * @param {Array<string>} userIds - Array of user account IDs
+     * @returns {Map<string, number>} Map of userId to custom daily hours
+     */
+    async getCustomDailyHoursBatch(userIds) {
+        try {
+            const customHoursMap = new Map();
+            const promises = userIds.map(async (userId) => {
+                const hours = await this.getCustomDailyHours(userId);
+                if (hours !== null) {
+                    customHoursMap.set(userId, hours);
+                }
+            });
+            await Promise.all(promises);
+            return customHoursMap;
+        } catch (error) {
+            console.error("Error getting custom daily hours batch:", error);
+            return new Map();
+        }
+    }
+
+    /**
+     * Update a single employee's overtime data with new daily hours
+     * @param {string} userId - User account ID
+     * @param {number} newDailyHours - New custom daily hours
+     * @param {string} startDate - Start date in YYYY-MM-DD format
+     * @param {string} endDate - End date in YYYY-MM-DD format
+     * @returns {Object} Updated employee data
+     */
+    async updateEmployeeDailyHours(userId, newDailyHours, startDate, endDate) {
+        try {
+            // Save the new custom daily hours
+            await this.saveCustomDailyHours(userId, newDailyHours);
+
+            // Fetch fresh worklog data for this user
+            const summaryData = await this.fetchWorklogSummary(startDate, endDate, null, userId);
+
+            if (!summaryData || !summaryData.userView || summaryData.userView.length === 0) {
+                console.warn(`No worklog data found for user ${userId}`);
+                return null;
+            }
+
+            const userEntry = summaryData.userView[0];
+            const user = userEntry.user || {};
+            const totalLoggedSeconds = userEntry.totalLogged || 0;
+            const totalLoggedHours = totalLoggedSeconds / 3600;
+
+            // Calculate required hours with the NEW custom daily hours
+            const startDateObj = new Date(startDate);
+            const endDateObj = new Date(endDate);
+            const requiredHours = this.calculateRequiredHours(startDateObj, endDateObj, newDailyHours);
+
+            const employeeData = {
+                id: user.id || user.accountId || userId,
+                name: user.name || user.displayName || "Unknown User",
+                totalHours: Math.round(totalLoggedHours * 100) / 100,
+                requiredHours: Math.round(requiredHours * 100) / 100,
+                overtime: Math.round((totalLoggedHours - requiredHours) * 100) / 100,
+                overtimePercentage: Math.round(((totalLoggedHours - requiredHours) / (requiredHours || 1)) * 10000) / 100,
+                billableHours: Math.round((userEntry.billableLoggedSeconds || 0) / 3600 * 100) / 100,
+                nonBillableHours: Math.round((userEntry.nonBillableLoggedSeconds || 0) / 3600 * 100) / 100,
+                customDailyHours: newDailyHours,
+            };
+
+            console.log(`Updated employee data for ${userId}:`, employeeData);
+            return employeeData;
+        } catch (error) {
+            console.error(`Error updating employee daily hours for user ${userId}:`, error);
+            throw error;
         }
     }
 }
